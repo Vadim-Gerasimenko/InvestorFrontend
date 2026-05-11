@@ -1,5 +1,10 @@
 <template>
   <div class="profile-container">
+    <NotificationBanner
+      v-if="notification.show"
+      :message="notification.message"
+      :type="notification.type"
+    />
     <div class="profile-content">
       <div class="info-card">
         <div v-if="!editing" class="view-mode">
@@ -16,24 +21,33 @@
             <label>Фамилия</label>
             <input v-model="editData.lastName" type="text" />
             <span v-if="profileErrors.lastName" class="error-text">{{
-                profileErrors.lastName
-              }}</span>
+              profileErrors.lastName
+            }}</span>
           </div>
           <div class="form-group">
             <label>Имя</label>
             <input v-model="editData.firstName" type="text" />
             <span v-if="profileErrors.firstName" class="error-text">{{
-                profileErrors.firstName
-              }}</span>
+              profileErrors.firstName
+            }}</span>
           </div>
           <div class="form-group">
             <label>Отчество</label>
             <input v-model="editData.middleName" type="text" />
           </div>
           <div class="form-group">
-            <label>Email</label>
-            <input v-model="editData.email" type="email" />
-            <span v-if="profileErrors.email" class="error-text">{{ profileErrors.email }}</span>
+            <label>Дата рождения</label>
+            <input
+              v-model="editData.birthDate"
+              @input="formatBirthDateInput"
+              @keydown="handleDateKeydown"
+              type="text"
+              placeholder="ДД.ММ.ГГГГ"
+              maxlength="10"
+            />
+            <span v-if="profileErrors.birthDate" class="error-text">{{
+              profileErrors.birthDate
+            }}</span>
           </div>
           <div class="form-group">
             <label>Телефон</label>
@@ -46,8 +60,8 @@
               maxlength="18"
             />
             <span v-if="profileErrors.phoneNumber" class="error-text">{{
-                profileErrors.phoneNumber
-              }}</span>
+              profileErrors.phoneNumber
+            }}</span>
           </div>
           <div class="form-actions">
             <button @click="saveProfile" class="save-btn">Сохранить</button>
@@ -56,8 +70,8 @@
         </div>
       </div>
 
-      <div class="tariff-card">
-        <h1 class="tariff-title">Тариф "Инвестор"</h1>
+      <div class="tariff-card" v-if="tariff.name && tariff.fees && tariff.fees.length > 0">
+        <h1 class="tariff-title">{{ tariff.name }}</h1>
 
         <div class="tax-section">
           <h2>Налоги</h2>
@@ -72,29 +86,9 @@
         <div class="commission-section">
           <h2>Комиссия за операции</h2>
           <div class="commission-list">
-            <div class="commission-item">
-              <span>Акции</span>
-              <span>0.05%</span>
-            </div>
-            <div class="commission-item">
-              <span>Облигации</span>
-              <span>0.05%</span>
-            </div>
-            <div class="commission-item">
-              <span>ETF</span>
-              <span>0.05%</span>
-            </div>
-            <div class="commission-item">
-              <span>Фьючерсы</span>
-              <span>0.02%</span>
-            </div>
-            <div class="commission-item">
-              <span>Опционы</span>
-              <span>0.03%</span>
-            </div>
-            <div class="commission-item">
-              <span>Валюта</span>
-              <span>0.1%</span>
+            <div class="commission-item" v-for="fee in tariff.fees" :key="fee.instrument">
+              <span>{{ fee.instrument }}</span>
+              <span>{{ (fee.percentNano / 1000000000).toFixed(2) }}%</span>
             </div>
           </div>
         </div>
@@ -102,6 +96,23 @@
 
       <div class="tokens-card">
         <h2>Токены Т-Инвестиций</h2>
+
+        <div v-if="tokens.length === 0" class="warning-box">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8V12M12 16H12.01M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="warning-text">
+            <strong>Токен отсутствует или некорректен</strong>
+            <p>
+              Пожалуйста, выпустите новый токен на сайте
+              <a href="https://www.tbank.ru/invest/settings/api/" target="_blank" rel="noopener noreferrer" class="warning-link">
+                Т-Инвестиции
+              </a>
+               для конкретного счёта или для всех счетов сразу в режиме "Только просмотр".
+            </p>
+          </div>
+        </div>
+
         <div class="tokens-list">
           <div
             v-for="token in tokens"
@@ -170,25 +181,74 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import api from '@/utils/axios'
+import { handleTokenError } from '@/utils/errorHandler'
+import NotificationBanner from '@/components/NotificationBanner.vue'
+
+const notification = ref({
+  show: false,
+  message: '',
+  type: 'warning',
+})
+
+const showNotification = ({ message, type }) => {
+  notification.value = {
+    show: true,
+    message,
+    type,
+  }
+
+  setTimeout(() => {
+    notification.value.show = false
+  }, 15000)
+}
 
 const editing = ref(false)
 const showAddModal = ref(false)
 const showManageModal = ref(false)
 const selectedToken = ref(null)
+const isLoading = ref(false)
 
 const user = reactive({
-  lastName: 'Иванов',
-  firstName: 'Иван',
-  middleName: 'Иванович',
-  email: 'ivan@example.com',
-  phoneNumber: '79123456789',
+  lastName: '',
+  firstName: '',
+  middleName: '',
+  email: '',
+  phoneNumber: '',
+  birthDate: '',
 })
+
+const tariff = ref({
+  name: '',
+  fees: [],
+})
+
+const tokens = ref([])
+const activeToken = ref(null)
 
 const profileErrors = reactive({
   lastName: '',
   firstName: '',
   email: '',
   phoneNumber: '',
+})
+
+const editData = reactive({
+  lastName: '',
+  firstName: '',
+  middleName: '',
+  email: '',
+  phoneNumber: '',
+})
+
+const newToken = reactive({
+  name: '',
+  value: '',
+})
+
+const errors = reactive({
+  name: '',
+  value: '',
 })
 
 const validateProfile = () => {
@@ -225,50 +285,23 @@ const validateProfile = () => {
     isValid = false
   }
 
+  if (editData.birthDate) {
+    const birthDateRegex = /^\d{2}\.\d{2}\.\d{4}$/
+    if (!birthDateRegex.test(editData.birthDate)) {
+      profileErrors.birthDate = 'Введите дату в формате ДД.ММ.ГГГГ'
+      isValid = false
+    } else {
+      const [day, month, year] = editData.birthDate.split('.').map(Number)
+      const date = new Date(year, month - 1, day)
+      if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+        profileErrors.birthDate = 'Введите корректную дату'
+        isValid = false
+      }
+    }
+  }
+
   return isValid
 }
-
-const editData = reactive({
-  lastName: '',
-  firstName: '',
-  middleName: '',
-  email: '',
-  phoneNumber: '',
-})
-
-const tokens = ref([
-  { id: 1, name: 'Токен 1', value: 't.xxxx1', isActive: true },
-  { id: 2, name: 'Токен 2', value: 't.xxxx2', isActive: false },
-])
-
-const newToken = reactive({
-  name: '',
-  value: '',
-})
-
-const errors = reactive({
-  name: '',
-  value: '',
-})
-
-const financialData = reactive({
-  currentCashBalance: 100000.00,
-  portfolioAmount: 250000.00,
-  potentialTotalProfit: 35000.00,
-  closedTradesFees: 1500.00,
-  closedTradesProfitBeforeTax: 50000.00,
-  closedTradesTax: 6500.00,
-  closedTradesProfit: 43500.00,
-  closedTradesPassiveIncome: 5000.00,
-  closedTradesTotalProfit: 48500.00,
-  openTradesFees: 2000.00,
-  openTradesProfitBeforeTax: 40000.00,
-  openTradesPotentialTaxableBase: 40000.00,
-  openTradesPotentialTax: 5200.00,
-  openTradesPotentialProfit: 34800.00,
-  openTradesPassiveIncome: 3000.00,
-  openTradesTotalPotentialProfit: 37800.00
-})
 
 const formattedPhone = computed(() => {
   const phone = user.phoneNumber.replace(/\D/g, '')
@@ -313,6 +346,127 @@ const handlePhoneKeydown = (event) => {
   }
 }
 
+const formatBirthDateForView = (date) => {
+  console.log('formatBirthDateForView called with:', date)
+  if (!date) return ''
+  if (Array.isArray(date)) {
+    const [year, month, day] = date
+    return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
+  }
+  if (typeof date === 'string') {
+    return date
+  }
+  return ''
+}
+
+const formatBirthDateInput = (event) => {
+  let value = event.target.value.replace(/\D/g, '')
+
+  if (value.length === 0) {
+    editData.birthDate = ''
+    return
+  }
+
+  if (value.length > 8) {
+    value = value.slice(0, 8)
+  }
+
+  let formatted = ''
+  for (let i = 0; i < value.length; i++) {
+    if (i === 2 || i === 4) {
+      formatted += '.'
+    }
+    formatted += value[i]
+  }
+
+  editData.birthDate = formatted
+}
+
+const handleDateKeydown = (event) => {
+  const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End']
+  if (!allowedKeys.includes(event.key) && !/^\d$/.test(event.key)) {
+    event.preventDefault()
+  }
+}
+
+const loadProfile = async () => {
+  try {
+    const response = await api.get('/api/profile/user')
+    const data = response.data
+    user.lastName = data.lastName || ''
+    user.firstName = data.firstName || ''
+    user.middleName = data.middleName || ''
+    user.email = data.email || ''
+    user.phoneNumber = data.phoneNumber?.replace(/\D/g, '') || ''
+    user.birthDate = data.birthDate || ''
+  } catch (error) {
+    console.error('Ошибка загрузки профиля:', error)
+  }
+}
+
+const updateProfile = async () => {
+  try {
+    const profileData = {
+      lastName: editData.lastName,
+      firstName: editData.firstName,
+      middleName: editData.middleName,
+      email: editData.email,
+      phoneNumber: editData.phoneNumber.replace(/\D/g, ''),
+      birthDate: editData.birthDate || '',
+    }
+    await api.put('/api/profile/user', profileData)
+    await loadProfile()
+    return true
+  } catch (error) {
+    console.error('Ошибка обновления профиля:', error)
+    return false
+  }
+}
+
+const loadTariff = async () => {
+  try {
+    const response = await api.get('/api/profile/tariff')
+    tariff.value = response.data
+  } catch (error) {
+    console.error('Ошибка загрузки тарифа:', error)
+    console.error('Ошибка загрузки тарифа:', error)
+
+    if (
+      error.response?.data?.message === 'No active token found' ||
+      error.response?.data?.message?.includes('Tariff not found')
+    ) {
+      showNotification({
+        message:
+          'Токен отсутствует или некорректен. Пожалуйста, получите новый токен на сайте Т-Инвестиций и добавьте его ниже.',
+        type: 'warning',
+      })
+    }
+  }
+}
+
+const loadTokens = async () => {
+  try {
+    const response = await api.get('/api/profile/tokens')
+    const data = response.data
+    activeToken.value = data.activeToken
+    tokens.value = data.tokens.map((t) => ({
+      id: t.tokenName,
+      name: t.tokenName,
+      isActive: activeToken.value?.tokenName === t.tokenName,
+    }))
+  } catch (error) {
+    console.error('Ошибка загрузки токенов:', error)
+
+    if (error.response?.data?.message === 'No active token found') {
+      showNotification({
+        message:
+          'У вас нет активного токена. Добавьте токен Т-Инвестиций для работы с приложением.',
+        type: 'warning',
+      })
+    }
+  }
+}
+
 const startEdit = () => {
   Object.assign(editData, {
     lastName: user.lastName,
@@ -320,6 +474,7 @@ const startEdit = () => {
     middleName: user.middleName,
     email: user.email,
     phoneNumber: formattedPhone.value,
+    birthDate: user.birthDate,
   })
   editing.value = true
 }
@@ -328,20 +483,15 @@ const cancelEdit = () => {
   editing.value = false
 }
 
-const saveProfile = () => {
+const saveProfile = async () => {
   if (!validateProfile()) return
-
-  const cleanPhone = editData.phoneNumber.replace(/\D/g, '')
-  Object.assign(user, {
-    lastName: editData.lastName,
-    firstName: editData.firstName,
-    middleName: editData.middleName,
-    email: editData.email,
-    phoneNumber: cleanPhone,
-  })
-  editing.value = false
-  console.log('Сохраненные данные:', user)
-  alert('Данные сохранены')
+  const success = await updateProfile()
+  if (success) {
+    editing.value = false
+    alert('Данные сохранены')
+  } else {
+    alert('Ошибка сохранения')
+  }
 }
 
 const openAddModal = () => {
@@ -379,8 +529,8 @@ const validateToken = () => {
   if (!newToken.value.trim()) {
     errors.value = 'Токен обязателен'
     isValid = false
-  } else if (newToken.value.length !== 80) {
-    errors.value = 'Длина токена должна быть 80 символов'
+  } else if (newToken.value.length !== 88) {
+    errors.value = 'Длина токена должна быть 88 символов'
     isValid = false
   } else if (!newToken.value.startsWith('t.')) {
     errors.value = 'Неверный формат токена. Токен должен начинаться с "t."'
@@ -390,65 +540,55 @@ const validateToken = () => {
   return isValid
 }
 
-const addToken = () => {
+const addToken = async () => {
   if (!validateToken()) return
 
-  const newId = Math.max(...tokens.value.map((t) => t.id), 0) + 1
-  tokens.value.push({
-    id: newId,
-    name: newToken.name,
-    value: newToken.value,
-    isActive: false,
-  })
-
-  console.log('Добавлен токен:', newToken)
-  alert('Токен добавлен (тестовый режим)')
-  closeModals()
+  try {
+    await api.post('/api/profile/tokens', {
+      token: newToken.value,
+      name: newToken.name,
+    })
+    await loadTokens()
+    alert('Токен добавлен')
+    closeModals()
+  } catch (error) {
+    console.error('Ошибка добавления токена:', error)
+    alert('Ошибка при добавлении токена')
+  }
 }
 
-const activateToken = () => {
-  tokens.value.forEach((t) => {
-    t.isActive = t.id === selectedToken.value.id
-  })
-  console.log('Активирован токен:', selectedToken.value)
-  alert(`Токен "${selectedToken.value.name}" активирован`)
-  closeModals()
+const activateToken = async () => {
+  try {
+    await api.post('/api/profile/tokens/activate', {
+      name: selectedToken.value.name,
+    })
+    await loadTokens()
+    alert(`Токен "${selectedToken.value.name}" активирован`)
+    closeModals()
+  } catch (error) {
+    console.error('Ошибка активации токена:', error)
+    alert('Ошибка при активации токена')
+  }
 }
 
-const deleteToken = () => {
-  const index = tokens.value.findIndex((t) => t.id === selectedToken.value.id)
-  if (index !== -1) {
-    tokens.value.splice(index, 1)
+const deleteToken = async () => {
+  try {
+    await api.delete('/api/profile/tokens', {
+      data: { token: selectedToken.value.name },
+    })
+    await loadTokens()
+    alert(`Токен "${selectedToken.value.name}" удален`)
+    closeModals()
+  } catch (error) {
+    console.error('Ошибка удаления токена:', error)
+    alert('Ошибка при удалении токена')
   }
-  console.log('Удален токен:', selectedToken.value)
-  alert(`Токен "${selectedToken.value.name}" удален`)
-  closeModals()
-}
-
-const getValueClass = (value, type) => {
-  if (type === 'positive-negative') {
-    if (value > 0) return 'profit-green'
-    if (value < 0) return 'loss-red'
-    return ''
-  }
-  if (type === 'positive-only') {
-    if (value > 0) return 'loss-red'
-    return ''
-  }
-  if (type === 'black-only') {
-    return ''
-  }
-  return ''
-}
-
-const formatValue = (value, type) => {
-  if (type === 'positive-only' && (!value || value === 0)) return '—'
-  if (type === 'positive-negative' && (!value && value !== 0)) return '0.00'
-  return Number(value).toFixed(2)
 }
 
 onMounted(() => {
-  console.log('Profile загружен')
+  loadProfile()
+  loadTariff()
+  loadTokens()
 })
 </script>
 
@@ -502,6 +642,12 @@ onMounted(() => {
 }
 
 .user-phone {
+  font-size: 0.95rem;
+  color: #888;
+  margin-bottom: 1.5rem;
+}
+
+.user-birthdate {
   font-size: 0.95rem;
   color: #888;
   margin-bottom: 1.5rem;
@@ -840,5 +986,57 @@ onMounted(() => {
   .tariff-title {
     font-size: 1.4rem;
   }
+}
+
+.warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #fff9f0 0%, #fff4e6 100%);
+  border: 1px solid #ffd699;
+  border-radius: 16px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(255, 165, 0, 0.08);
+}
+
+.warning-icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  color: #ffa500;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.warning-text {
+  flex: 1;
+}
+
+.warning-text strong {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #cc8b00;
+  margin-bottom: 0.5rem;
+}
+
+.warning-text p {
+  font-size: 0.9rem;
+  color: #8b6b3d;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.warning-link {
+  color: #ffa500;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.warning-link:hover {
+  color: #cc7b00;
+  text-decoration: underline;
 }
 </style>

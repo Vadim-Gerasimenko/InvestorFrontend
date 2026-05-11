@@ -56,7 +56,6 @@ const handleSubmit = async () => {
     });
 
     if (result.success) {
-      // Перенаправляем на главную страницу
       router.push('/');
     } else {
       errorMessage.value = result.error || 'Ошибка входа';

@@ -37,32 +37,35 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { ref } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import router from '@/router/index';
 
-const authStore = useAuthStore()
-const isLoading = ref(false)
-const errorMessage = ref('')
+const authStore = useAuthStore();
 
-const form = reactive({
+const form = ref({
   email: '',
-  password: '',
-})
+  password: ''
+});
+
+const errorMessage = ref('');
+const isLoading = ref(false);
 
 const handleLogin = async () => {
-  isLoading.value = true
-  errorMessage.value = ''
+  isLoading.value = true;
+  errorMessage.value = '';
 
-  const result = await authStore.login(form)
+  const result = await authStore.login(form.value.email, form.value.password);
 
   if (result.success) {
-    window.location.href = '/dashboard'
+    console.log('Login success, token saved:', !!localStorage.getItem('access_token'));
+    router.push('/dashboard');
   } else {
-    errorMessage.value = result.message
+    errorMessage.value = result.message || 'Ошибка входа';
   }
 
-  isLoading.value = false
-}
+  isLoading.value = false;
+};
 </script>
 
 <style scoped>

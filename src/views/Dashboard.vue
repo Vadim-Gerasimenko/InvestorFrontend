@@ -1,5 +1,10 @@
 <template>
   <div class="dashboard-container">
+    <NotificationBanner
+      v-if="notification.show"
+      :message="notification.message"
+      :type="notification.type"
+    />
     <div class="tabs-wrapper">
       <div class="account-card">
         <h2>Счёт</h2>
@@ -10,7 +15,17 @@
             class="account-item"
             @click="selectAccount(account.id)"
           >
-            <span class="account-name">{{ account.name }}</span>
+            <div class="account-info">
+              <span class="account-name">{{ account.name }}</span>
+              <div class="account-badges">
+          <span class="badge badge-status" :class="getStatusClass(account.status)">
+            {{ account.status }}
+          </span>
+                <span class="badge badge-access" :class="getAccessClass(account.accessLevel)">
+            {{ account.accessLevel }}
+          </span>
+              </div>
+            </div>
             <span class="account-check" v-if="selectedAccount === account.id">✓</span>
           </div>
         </div>
@@ -59,7 +74,11 @@
             </div>
             <div class="info-row">
               <span>Доход от трейдов (до НДФЛ), руб</span>
-              <span :class="getTradingProfitClass(report?.financialSummary?.closedTradesProfitBeforeTax)">
+              <span
+                :class="
+                  getTradingProfitClass(report?.financialSummary?.closedTradesProfitBeforeTax)
+                "
+              >
                 {{ formatNumber(report?.financialSummary?.closedTradesProfitBeforeTax) }}
               </span>
             </div>
@@ -77,13 +96,18 @@
             </div>
             <div class="info-row">
               <span>Прибыль от дивидендов/купонов, руб</span>
-              <span :class="getPassiveIncomeClass(report?.financialSummary?.closedTradesPassiveIncome)">
+              <span
+                :class="getPassiveIncomeClass(report?.financialSummary?.closedTradesPassiveIncome)"
+              >
                 {{ formatPassiveIncomeValue(report?.financialSummary?.closedTradesPassiveIncome) }}
               </span>
             </div>
             <div class="info-row total">
               <span>Итоговая прибыль, руб</span>
-              <span :class="getProfitClass(report?.financialSummary?.closedTradesTotalProfit)" class="bold-number">
+              <span
+                :class="getProfitClass(report?.financialSummary?.closedTradesTotalProfit)"
+                class="bold-number"
+              >
                 {{ formatNumber(report?.financialSummary?.closedTradesTotalProfit) }}
               </span>
             </div>
@@ -99,7 +123,9 @@
             </div>
             <div class="info-row">
               <span>Потенциальный доход от трейдов (до НДФЛ), руб</span>
-              <span :class="getTradingProfitClass(report?.financialSummary?.openTradesProfitBeforeTax)">
+              <span
+                :class="getTradingProfitClass(report?.financialSummary?.openTradesProfitBeforeTax)"
+              >
                 {{ formatNumber(report?.financialSummary?.openTradesProfitBeforeTax) }}
               </span>
             </div>
@@ -123,13 +149,18 @@
             </div>
             <div class="info-row">
               <span>Прибыль от дивидендов/купонов, руб</span>
-              <span :class="getPassiveIncomeClass(report?.financialSummary?.openTradesPassiveIncome)">
+              <span
+                :class="getPassiveIncomeClass(report?.financialSummary?.openTradesPassiveIncome)"
+              >
                 {{ formatPassiveIncomeValue(report?.financialSummary?.openTradesPassiveIncome) }}
               </span>
             </div>
             <div class="info-row total">
               <span>Потенциальная прибыль, руб</span>
-              <span :class="getProfitClass(report?.financialSummary?.openTradesTotalPotentialProfit)" class="bold-number">
+              <span
+                :class="getProfitClass(report?.financialSummary?.openTradesTotalPotentialProfit)"
+                class="bold-number"
+              >
                 {{ formatNumber(report?.financialSummary?.openTradesTotalPotentialProfit) }}
               </span>
             </div>
@@ -148,11 +179,11 @@
               <span class="expand-icon">{{ expandedTypes[instrumentType] ? '▲' : '▼' }}</span>
             </div>
             <div v-if="expandedTypes[instrumentType]" class="type-content">
-              <div v-for="trade in trades" :key="trade.instrument?.uid" class="trade-card">
-                <div class="trade-header" @click="toggleTradeExpand(trade.instrument?.uid)">
+              <div v-for="trade in trades" :key="trade.uniqueId" class="trade-card">
+                <div class="trade-header" @click="toggleTradeExpand(trade.uniqueId)">
                   <div class="trade-info">
                     <span class="trade-name"
-                    >{{ trade.instrument?.name }} ({{ trade.instrument?.ticker }})</span
+                      >{{ trade.instrument?.name }} ({{ trade.instrument?.ticker }})</span
                     >
                     <span class="trade-date">открытие: {{ formatDate(trade.openedAt) }}</span>
                     <span class="trade-date">закрытие: {{ formatDate(trade.closedAt) }}</span>
@@ -166,12 +197,12 @@
                   <div class="trade-controls">
                     <span class="details-link">Подробнее</span>
                     <span class="expand-icon">{{
-                        expandedTrades[trade.instrument?.uid] ? '▲' : '▼'
-                      }}</span>
+                      expandedTrades[trade.uniqueId] ? '▲' : '▼'
+                    }}</span>
                   </div>
                 </div>
 
-                <div v-if="expandedTrades[trade.instrument?.uid]" class="trade-details">
+                <div v-if="expandedTrades[trade.uniqueId]" class="trade-details">
                   <div class="details-columns">
                     <div class="detail-column">
                       <div class="detail-row">
@@ -185,10 +216,10 @@
                       <div class="detail-row">
                         <span>Объём продаж, руб</span>
                         <span>{{
-                            trade.totalSellValue > 0
-                              ? formatNumber(trade.totalSellValue)
-                              : 'Не продавалась'
-                          }}</span>
+                          trade.totalSellValue > 0
+                            ? formatNumber(trade.totalSellValue)
+                            : 'Не продавалась'
+                        }}</span>
                       </div>
                       <div class="detail-row">
                         <span>Средняя цена покупки, руб/шт</span>
@@ -197,10 +228,10 @@
                       <div class="detail-row">
                         <span>Средняя цена продажи, руб/шт</span>
                         <span>{{
-                            trade.avgSellPrice > 0
-                              ? formatNumber(trade.avgSellPrice)
-                              : 'Не продавалась'
-                          }}</span>
+                          trade.avgSellPrice > 0
+                            ? formatNumber(trade.avgSellPrice)
+                            : 'Не продавалась'
+                        }}</span>
                       </div>
                     </div>
 
@@ -241,42 +272,42 @@
                   <div class="operations-section">
                     <div
                       class="operations-header"
-                      @click="toggleOperationsExpand(trade.instrument?.uid)"
+                      @click="toggleOperationsExpand(trade.uniqueId)"
                     >
                       <span class="operations-link">Операции по инструменту</span>
                       <span class="expand-icon">{{
-                          expandedOperations[trade.instrument?.uid] ? '▲' : '▼'
-                        }}</span>
+                        expandedOperations[trade.uniqueId] ? '▲' : '▼'
+                      }}</span>
                     </div>
 
                     <div
-                      v-if="expandedOperations[trade.instrument?.uid]"
+                      v-if="expandedOperations[trade.uniqueId]"
                       class="operations-table-wrapper"
                     >
                       <table class="operations-table">
                         <thead>
-                        <tr>
-                          <th>Дата</th>
-                          <th>Тип операции</th>
-                          <th>Количество</th>
-                          <th>Цена, руб</th>
-                          <th>Сумма, руб</th>
-                        </tr>
+                          <tr>
+                            <th>Дата</th>
+                            <th>Тип операции</th>
+                            <th>Количество</th>
+                            <th>Цена, руб</th>
+                            <th>Сумма, руб</th>
+                          </tr>
                         </thead>
                         <tbody>
-                        <tr v-for="op in trade.operations" :key="op.id">
-                          <td>{{ formatDateTime(op.date) }}</td>
-                          <td>{{ getOperationTypeName(op.operationType) }}</td>
-                          <td>{{ op.quantity > 0 ? op.quantity : '—' }}</td>
-                          <td>
-                            {{
-                              op.trades?.length
-                                ? formatNumber(op.trades[0]?.price / 1000000000)
-                                : '—'
-                            }}
-                          </td>
-                          <td>{{ formatNumber(op.payment / 1000000000) }}</td>
-                        </tr>
+                          <tr v-for="op in trade.operations" :key="op.id">
+                            <td>{{ formatDateTime(op.date) }}</td>
+                            <td>{{ getOperationTypeName(op.operationType) }}</td>
+                            <td>{{ op.quantity > 0 ? op.quantity : '—' }}</td>
+                            <td>
+                              {{
+                                op.trades?.length
+                                  ? formatNumber(op.trades[0]?.price / 1000000000)
+                                  : '—'
+                              }}
+                            </td>
+                            <td>{{ formatNumber(op.payment / 1000000000) }}</td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
@@ -299,40 +330,34 @@
               <span class="expand-icon">{{ expandedOpenTypes[instrumentType] ? '▲' : '▼' }}</span>
             </div>
             <div v-if="expandedOpenTypes[instrumentType]" class="type-content">
-              <div v-for="trade in trades" :key="trade.instrument?.uid" class="trade-card">
-                <div class="trade-header" @click="toggleOpenTradeExpand(trade.instrument?.uid)">
+              <div v-for="trade in trades" :key="trade.uniqueId" class="trade-card">
+                <div class="trade-header" @click="toggleOpenTradeExpand(trade.uniqueId)">
                   <div class="trade-info">
                     <span class="trade-name"
-                    >{{ trade.instrument?.name }} ({{ trade.instrument?.ticker }})</span
+                      >{{ trade.instrument?.name }} ({{ trade.instrument?.ticker }})</span
                     >
                     <span class="trade-date">количество: {{ trade.remainingQuantity }}</span>
                     <span class="trade-date"
-                    >стоимость: {{ formatNumber(trade.currentAmount) }}</span
+                      >стоимость: {{ formatNumber(trade.currentAmount) }}</span
                     >
                     <span class="trade-label">прогнозируемая прибыль:</span>
                     <span
                       :class="
-                        getProfitClass(
-                          trade.passiveIncome + trade.profitFromSpeculationBeforeTax,
-                        )
+                        getProfitClass(trade.passiveIncome + trade.profitFromSpeculationBeforeTax)
                       "
                     >
-                      {{
-                        formatNumber(
-                          trade.passiveIncome + trade.profitFromSpeculationBeforeTax,
-                        )
-                      }}
+                      {{ formatNumber(trade.passiveIncome + trade.profitFromSpeculationBeforeTax) }}
                     </span>
                   </div>
                   <div class="trade-controls">
                     <span class="details-link">Подробнее</span>
                     <span class="expand-icon">{{
-                        expandedOpenTrades[trade.instrument?.uid] ? '▲' : '▼'
-                      }}</span>
+                      expandedOpenTrades[trade.uniqueId] ? '▲' : '▼'
+                    }}</span>
                   </div>
                 </div>
 
-                <div v-if="expandedOpenTrades[trade.instrument?.uid]" class="trade-details">
+                <div v-if="expandedOpenTrades[trade.uniqueId]" class="trade-details">
                   <div class="details-columns">
                     <div class="detail-column">
                       <div class="detail-row">
@@ -350,8 +375,8 @@
                       <div class="detail-row">
                         <span>Продано в рамках трейда, шт</span>
                         <span>{{
-                            trade.totalSellQuantity > 0 ? trade.totalSellQuantity : '—'
-                          }}</span>
+                          trade.totalSellQuantity > 0 ? trade.totalSellQuantity : '—'
+                        }}</span>
                       </div>
                       <div class="detail-row">
                         <span>Средняя цена покупки, руб/шт</span>
@@ -360,8 +385,8 @@
                       <div class="detail-row">
                         <span>Средняя цена продажи, руб/шт</span>
                         <span>{{
-                            trade.avgSellPrice > 0 ? formatNumber(trade.avgSellPrice) : '—'
-                          }}</span>
+                          trade.avgSellPrice > 0 ? formatNumber(trade.avgSellPrice) : '—'
+                        }}</span>
                       </div>
                     </div>
 
@@ -391,12 +416,7 @@
                       <div class="detail-row">
                         <span>Прибыль от дивидендов/купонов, руб</span>
                         <span
-                          :class="
-                            getPassiveProfitClass(
-                              trade.passiveIncome,
-                              trade.passiveIncome,
-                            )
-                          "
+                          :class="getPassiveProfitClass(trade.passiveIncome, trade.passiveIncome)"
                         >
                           {{ formatPassiveProfitValue(trade.passiveIncome) }}
                         </span>
@@ -413,42 +433,42 @@
                   <div class="operations-section">
                     <div
                       class="operations-header"
-                      @click="toggleOpenOperationsExpand(trade.instrument?.uid)"
+                      @click="toggleOpenOperationsExpand(trade.uniqueId)"
                     >
                       <span class="operations-link">Операции по инструменту</span>
                       <span class="expand-icon">{{
-                          expandedOpenOperations[trade.instrument?.uid] ? '▲' : '▼'
-                        }}</span>
+                        expandedOpenOperations[trade.uniqueId] ? '▲' : '▼'
+                      }}</span>
                     </div>
 
                     <div
-                      v-if="expandedOpenOperations[trade.instrument?.uid]"
+                      v-if="expandedOpenOperations[trade.uniqueId]"
                       class="operations-table-wrapper"
                     >
                       <table class="operations-table">
                         <thead>
-                        <tr>
-                          <th>Дата</th>
-                          <th>Тип операции</th>
-                          <th>Количество</th>
-                          <th>Цена, руб</th>
-                          <th>Сумма, руб</th>
-                        </tr>
+                          <tr>
+                            <th>Дата</th>
+                            <th>Тип операции</th>
+                            <th>Количество</th>
+                            <th>Цена, руб</th>
+                            <th>Сумма, руб</th>
+                          </tr>
                         </thead>
                         <tbody>
-                        <tr v-for="op in trade.operations" :key="op.id">
-                          <td>{{ formatDateTime(op.date) }}</td>
-                          <td>{{ getOperationTypeName(op.operationType) }}</td>
-                          <td>{{ op.quantity > 0 ? op.quantity : '—' }}</td>
-                          <td>
-                            {{
-                              op.trades?.length
-                                ? formatNumber(op.trades[0]?.price / 1000000000)
-                                : '—'
-                            }}
-                          </td>
-                          <td>{{ formatNumber(op.payment / 1000000000) }}</td>
-                        </tr>
+                          <tr v-for="op in trade.operations" :key="op.id">
+                            <td>{{ formatDateTime(op.date) }}</td>
+                            <td>{{ getOperationTypeName(op.operationType) }}</td>
+                            <td>{{ op.quantity > 0 ? op.quantity : '—' }}</td>
+                            <td>
+                              {{
+                                op.trades?.length
+                                  ? formatNumber(op.trades[0]?.price / 1000000000)
+                                  : '—'
+                              }}
+                            </td>
+                            <td>{{ formatNumber(op.payment / 1000000000) }}</td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
@@ -472,19 +492,19 @@
               <div class="balance-table-wrapper">
                 <table class="balance-table">
                   <thead>
-                  <tr>
-                    <th class="text-left">Дата</th>
-                    <th class="text-right">Сумма, руб</th>
-                  </tr>
+                    <tr>
+                      <th class="text-left">Дата</th>
+                      <th class="text-right">Сумма, руб</th>
+                    </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="op in report?.financialSummary?.inputOperations" :key="op.id">
-                    <td class="text-left">{{ formatDateTime(op.date) }}</td>
-                    <td class="text-right">{{ formatNumber(op.payment / 1000000000) }}</td>
-                  </tr>
-                  <tr v-if="!report?.financialSummary?.inputOperations?.length">
-                    <td colspan="2" class="text-center">Нет операций</td>
-                  </tr>
+                    <tr v-for="op in report?.financialSummary?.inputOperations" :key="op.id">
+                      <td class="text-left">{{ formatDateTime(op.date) }}</td>
+                      <td class="text-right">{{ formatNumber(op.payment / 1000000000) }}</td>
+                    </tr>
+                    <tr v-if="!report?.financialSummary?.inputOperations?.length">
+                      <td colspan="2" class="text-center">Нет операций</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -500,25 +520,34 @@
               <div class="balance-table-wrapper">
                 <table class="balance-table">
                   <thead>
-                  <tr>
-                    <th class="text-left">Дата</th>
-                    <th class="text-right">Сумма, руб</th>
-                  </tr>
+                    <tr>
+                      <th class="text-left">Дата</th>
+                      <th class="text-right">Сумма, руб</th>
+                    </tr>
                   </thead>
                   <tbody>
-                  <tr v-for="op in report?.financialSummary?.outputOperations" :key="op.id">
-                    <td class="text-left">{{ formatDateTime(op.date) }}</td>
-                    <td class="text-right">{{ formatNumber(op.payment / 1000000000) }}</td>
-                  </tr>
-                  <tr v-if="!report?.financialSummary?.outputOperations?.length">
-                    <td colspan="2" class="text-center">Нет операций</td>
-                  </tr>
+                    <tr v-for="op in report?.financialSummary?.outputOperations" :key="op.id">
+                      <td class="text-left">{{ formatDateTime(op.date) }}</td>
+                      <td class="text-right">{{ formatNumber(op.payment / 1000000000) }}</td>
+                    </tr>
+                    <tr v-if="!report?.financialSummary?.outputOperations?.length">
+                      <td colspan="2" class="text-center">Нет операций</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
         </div>
+      </div>
+      <div class="export-bar">
+        <button @click="exportToExcel" class="export-btn" :disabled="isExporting">
+          <svg class="export-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19 10V19C19 20.1 18.1 21 17 21H7C5.9 21 5 20.1 5 19V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 15V3M9 6L12 3L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          {{ isExporting ? 'Выгрузка...' : 'Выгрузить отчёт' }}
+        </button>
       </div>
     </div>
   </div>
@@ -527,17 +556,44 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '@/utils/axios'
+import { useAuthStore } from '@/stores/auth'
+import router from '@/router/index'
+import { accountService } from '@/services/accountService'
+import { handleTokenError } from '@/utils/errorHandler'
+import NotificationBanner from '@/components/NotificationBanner.vue'
 
+const notification = ref({
+  show: false,
+  message: '',
+  type: 'warning'
+})
+
+const showNotification = ({ message, type }) => {
+  notification.value = {
+    show: true,
+    message,
+    type
+  }
+
+  setTimeout(() => {
+    notification.value.show = false
+  }, 30000)
+}
 
 const activeTab = ref('financial')
-const selectedAccount = ref(1)
+const selectedAccount = ref(null)
 const report = ref({})
+const errorMessage = ref('')
 const expandedTrades = ref({})
 const expandedOperations = ref({})
 const expandedTypes = ref({})
 const expandedOpenTrades = ref({})
 const expandedOpenOperations = ref({})
 const expandedOpenTypes = ref({})
+const accounts = ref([])
+const isLoadingAccounts = ref(false)
+
+const authStore = useAuthStore();
 
 const tabs = [
   { id: 'financial', name: 'Финансовые показатели' },
@@ -546,18 +602,80 @@ const tabs = [
   { id: 'balance', name: 'Операции с балансом' },
 ]
 
-const accounts = [
-  { id: 1, name: 'Брокерский счёт' },
-  { id: 2, name: 'ИИС' },
-  { id: 3, name: 'Депозитарный счёт' },
-]
+const loadAccounts = async () => {
+  isLoadingAccounts.value = true;
+  try {
+    const data = await accountService.getAllAccounts();
+    console.log('Accounts loaded:', data);
+
+    accounts.value = data.accounts.map(acc => ({
+      id: acc.name,
+      name: acc.name,
+      type: acc.type,
+      status: acc.status,
+      accessLevel: acc.accessLevel
+    }));
+
+    if (data.activeAccount) {
+      selectedAccount.value = data.activeAccount.name;
+    } else if (accounts.value.length > 0) {
+      selectedAccount.value = accounts.value[0].id;
+    }
+
+    if (selectedAccount.value) {
+      await loadReport();
+    }
+  } catch (error) {
+    console.error('Error loading accounts:', error);
+
+    if (handleTokenError(error, showNotification)) {
+      return
+    }
+
+    errorMessage.value = 'Ошибка загрузки счетов';
+  } finally {
+    isLoadingAccounts.value = false;
+  }
+}
+
+const selectAccount = async (accountId) => {
+  if (selectedAccount.value === accountId) return;
+
+  selectedAccount.value = accountId;
+
+  try {
+    await accountService.activateAccount(accountId);
+    console.log('Account activated:', accountId);
+    await loadReport();
+  } catch (error) {
+    console.error('Error activating account:', error);
+    errorMessage.value = 'Ошибка активации счета';
+  }
+}
+
+const getStatusClass = (status) => {
+  if (status === 'Открытый рабочий счёт') return 'badge-active'
+  if (status === 'Новый счёт в процессе открытия') return 'badge-pending'
+  if (status === 'Закрытый счёт') return 'badge-closed'
+  return 'badge-unknown'
+}
+
+const getAccessClass = (accessLevel) => {
+  if (accessLevel === 'Полный доступ к счёту') return 'badge-full'
+  if (accessLevel === 'Доступ с уровнем прав «только чтение»') return 'badge-readonly'
+  if (accessLevel === 'Нет доступа') return 'badge-no-access'
+  return 'badge-unknown'
+}
 
 const groupedClosedTrades = computed(() => {
   if (!report.value?.closedTrades) return {}
   return report.value.closedTrades.reduce((groups, trade) => {
     const type = trade.instrument?.type || 'other'
     if (!groups[type]) groups[type] = []
-    groups[type].push(trade)
+    groups[type].push({
+      ...trade,
+      uniqueId: `${trade.instrument?.uid}_${trade.openedAt}_${trade.closedAt}`
+    })
     return groups
   }, {})
 })
@@ -567,7 +685,10 @@ const groupedOpenTrades = computed(() => {
   return report.value.openTrades.reduce((groups, trade) => {
     const type = trade.instrument?.type || 'other'
     if (!groups[type]) groups[type] = []
-    groups[type].push(trade)
+    groups[type].push({
+      ...trade,
+      uniqueId: `${trade.instrument?.uid}_${trade.openedAt}_${trade.remainingQuantity}`
+    })
     return groups
   }, {})
 })
@@ -594,11 +715,6 @@ const getOperationTypeName = (type) => {
   return types[type] || type
 }
 
-const selectAccount = (id) => {
-  selectedAccount.value = id
-  loadReport()
-}
-
 const toggleTypeExpand = (type) => {
   expandedTypes.value[type] = !expandedTypes.value[type]
 }
@@ -607,20 +723,20 @@ const toggleOpenTypeExpand = (type) => {
   expandedOpenTypes.value[type] = !expandedOpenTypes.value[type]
 }
 
-const toggleTradeExpand = (uid) => {
-  expandedTrades.value[uid] = !expandedTrades.value[uid]
+const toggleTradeExpand = (uniqueId) => {
+  expandedTrades.value[uniqueId] = !expandedTrades.value[uniqueId]
 }
 
-const toggleOpenTradeExpand = (uid) => {
-  expandedOpenTrades.value[uid] = !expandedOpenTrades.value[uid]
+const toggleOpenTradeExpand = (uniqueId) => {
+  expandedOpenTrades.value[uniqueId] = !expandedOpenTrades.value[uniqueId]
 }
 
-const toggleOperationsExpand = (uid) => {
-  expandedOperations.value[uid] = !expandedOperations.value[uid]
+const toggleOperationsExpand = (uniqueId) => {
+  expandedOperations.value[uniqueId] = !expandedOperations.value[uniqueId]
 }
 
-const toggleOpenOperationsExpand = (uid) => {
-  expandedOpenOperations.value[uid] = !expandedOpenOperations.value[uid]
+const toggleOpenOperationsExpand = (uniqueId) => {
+  expandedOpenOperations.value[uniqueId] = !expandedOpenOperations.value[uniqueId]
 }
 
 const formatNumber = (value) => {
@@ -699,34 +815,103 @@ const formatPassiveProfitValue = (value) => {
 
 const loadReport = async () => {
   try {
-    const response = await api.get('/api/tbank/report')
-    console.log(123)
-    report.value = response.data
+    console.log('Loading report for account:', selectedAccount.value);
+    const response = await api.get('/api/portfolio/report');
+    report.value = response.data;
+    console.log('Report loaded successfully');
   } catch (error) {
-    console.error('Ошибка загрузки отчета:', error)
+    console.error('Load report error:', error);
+
+    if (handleTokenError(error, showNotification)) {
+      return
+    }
+    errorMessage.value = 'Ошибка загрузки данных';
   }
-}
+};
 
 let refreshInterval = null
 
 const startAutoRefresh = () => {
   if (refreshInterval) clearInterval(refreshInterval)
   refreshInterval = setInterval(() => {
-    loadReport()
+    if (authStore.isAuthenticated && selectedAccount.value) {
+      loadReport()
+    }
   }, 10000)
 }
 
 const expandedBalance = ref({
   deposit: true,
-  withdraw: true
+  withdraw: true,
 })
 
 const toggleBalanceExpand = (type) => {
   expandedBalance.value[type] = !expandedBalance.value[type]
 }
 
-onMounted(() => {
-  loadReport()
+const isExporting = ref(false)
+
+const exportToExcel = async () => {
+  isExporting.value = true
+
+  try {
+    const response = await api.get('/api/portfolio/report/excel', {
+      responseType: 'blob'
+    })
+
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+
+    const contentDisposition = response.headers['content-disposition']
+    let filename = 'report.xlsx'
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (match && match[1]) {
+        filename = match[1].replace(/['"]/g, '')
+      }
+    }
+
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    showNotification({
+      message: 'Отчет успешно выгружен',
+      type: 'success'
+    })
+  } catch (error) {
+    console.error('Export error:', error)
+
+    if (handleTokenError(error, showNotification)) {
+      return
+    }
+
+    showNotification({
+      message: 'Ошибка при выгрузке отчета',
+      type: 'error'
+    })
+  } finally {
+    isExporting.value = false
+  }
+}
+
+onMounted(async () => {
+  console.log('Dashboard mounted')
+  console.log('Authenticated:', authStore.isAuthenticated)
+
+  if (!authStore.isAuthenticated) {
+    console.log('Not authenticated, redirecting to login')
+    router.push('/login')
+    return
+  }
+
+  await loadAccounts()
   startAutoRefresh()
 })
 
@@ -1192,4 +1377,257 @@ onUnmounted(() => {
   color: #333 !important;
 }
 
+.account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.account-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.account-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.badge-status {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.badge-active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-closed {
+  background: #fde4e4;
+  color: #c62828;
+}
+
+.badge-blocked {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.badge-access {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.badge-readonly {
+  background: #fff8e1;
+  color: #f9a825;
+}
+
+.badge-full {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-unknown {
+  background: #f5f5f5;
+  color: #9e9e9e;
+}
+
+.account-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-item:hover {
+  background: #f5f5f5;
+}
+
+.account-check {
+  color: #ffa500;
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-left: 0.5rem;
+}
+
+.badge-status {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.badge-active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-pending {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.badge-closed {
+  background: #fde4e4;
+  color: #c62828;
+}
+
+.badge-access {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.badge-full {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-readonly {
+  background: #fff8e1;
+  color: #f9a825;
+}
+
+.badge-no-access {
+  background: #fde4e4;
+  color: #c62828;
+}
+
+.badge-unknown {
+  background: #f5f5f5;
+  color: #9e9e9e;
+}
+
+ /* серые
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: #f5f5f5;
+  color: #666;
+}
+
+.badge-active {
+  background: #e8eef2;
+  color: #2c3e50;
+}
+
+.badge-closed {
+  background: #f5f5f5;
+  color: #95a5a6;
+}
+
+.badge-readonly {
+  background: #eef2f5;
+  color: #7f8c8d;
+}
+
+.badge-full {
+  background: #e8f0e8;
+  color: #27ae60;
+}*/
+
+.export-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #a5d6a7 0%, #81c784 100%);
+  color: #2e5c2e;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 4px rgba(76, 175, 80, 0.1);
+  min-width: 180px;
+}
+
+.export-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
+  color: #1b5e1b;
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.export-btn:active:not(:disabled) {
+  transform: translateY(0px);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.export-btn:hover:not(:disabled)::before {
+  transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+  .export-bar {
+    justify-content: center;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+  }
+
+  .export-btn {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
+.export-icon {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) .export-icon {
+  transform: translateY(-2px);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.export-icon.spinning {
+  animation: spin 1s linear infinite;
+}
 </style>

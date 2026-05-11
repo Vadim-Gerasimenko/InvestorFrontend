@@ -1,89 +1,57 @@
-import { defineStore } from 'pinia'
-import { authApi } from '@/api/auth'
-import router from '@/router'
+import { defineStore } from 'pinia';
+import axios from '@/utils/axios';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    user: null,
-    accessToken: localStorage.getItem('access_token') || null,
-    isLoading: false
+    token: localStorage.getItem('access_token') || null,
   }),
 
   getters: {
-    isAuthenticated: (state) => !!state.accessToken && !!state.user,
-    getUser: (state) => state.user
+    isAuthenticated: (state) => {
+      const hasToken = state.token !== null && state.token !== undefined && state.token !== '';
+      console.log('isAuthenticated check:', hasToken, 'token:', state.token?.substring(0, 20));
+      return hasToken;
+    },
   },
 
   actions: {
-    async login(credentials) {
-      this.isLoading = true
+    async login(email, password) {
       try {
-        const response = await authApi.login(credentials)
-        const { accessToken, user } = response.data
+        delete axios.defaults.headers.common['Authorization'];
+        const response = await axios.post('/api/auth/login', { email, password });
+        const token = response.data.accessToken;
 
-        this.accessToken = accessToken
-        this.user = user
+        this.token = token;
+        localStorage.setItem('access_token', token);
+        this.$state.token = token;
+        console.log('Token saved to localStorage:', localStorage.getItem('access_token')?.substring(0, 50));
 
-        localStorage.setItem('access_token', accessToken)
-        localStorage.setItem('user', JSON.stringify(user))
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-        return { success: true }
+        return { success: true };
       } catch (error) {
-        return {
-          success: false,
-          message: error.response?.data?.message || 'Ошибка входа'
-        }
-      } finally {
-        this.isLoading = false
+        return { success: false, message: error.response?.data?.message || 'Ошибка входа' };
       }
     },
 
-    async register(userData) {
-      this.isLoading = true
+    async register(registerData) {
       try {
-        const response = await authApi.register(userData)
-        return { success: true, data: response.data }
+        delete axios.defaults.headers.common['Authorization'];
+        const response = await axios.post('/api/auth/register', registerData);
+        return { success: true };
       } catch (error) {
-        console.error('Registration error:', error)
+        console.error('Registration error:', error);
         return {
           success: false,
           message: error.response?.data?.message || 'Ошибка регистрации'
-        }
-      } finally {
-        this.isLoading = false
+        };
       }
     },
 
-    async logout() {
-      this.isLoading = true
-      try {
-        await authApi.logout()
-      } catch (error) {
-        console.error('Logout error:', error)
-      } finally {
-        this.clearAuth()
-        this.isLoading = false
-        router.push('/login')
-      }
+    logout() {
+      this.token = null;
+      localStorage.removeItem('access_token');
+      delete axios.defaults.headers.common['Authorization'];
     },
-
-    clearAuth() {
-      this.accessToken = null
-      this.user = null
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('user')
-    },
-
-    restoreSession() {
-      const token = localStorage.getItem('access_token')
-      const user = localStorage.getItem('user')
-
-      if (token && user) {
-        this.accessToken = token
-        this.user = JSON.parse(user)
-        return true
-      }
-      return false
-    }
-  }
-})
+  },
+});
